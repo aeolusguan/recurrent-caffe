@@ -38,14 +38,15 @@ class Solver {
   }
   int iter() { return iter_; }
 
- protected:
-  // Get the update value for the current iteration.
-  virtual void ComputeUpdateValue() = 0;
   // The Solver::Snapshot function implements the basic snapshotting utility
   // that stores the learned net. You should implement the SnapshotSolverState()
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
   void Snapshot();
+
+ protected:
+  // Get the update value for the current iteration.
+  virtual void ComputeUpdateValue() = 0;
   // The test routine
   void TestAll();
   void Test(const int test_net_id = 0);
