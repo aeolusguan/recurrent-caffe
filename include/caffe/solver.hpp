@@ -138,10 +138,10 @@ class AdaDeltaSolver : public SGDSolver<Dtype> {
   virtual void PreSolve();
   virtual void ComputeUpdateValue();
   void constructor_sanity_check() {
-    CHECK_EQ(0, this->param_.base_lr())
-        << "Learning rate cannot be used with AdaDelta.";
-    CHECK_EQ("", this->param_.lr_policy())
-        << "Learning rate policy cannot be applied to AdaDelta.";
+    // CHECK_EQ(0, this->param_.base_lr())
+    //     << "Learning rate cannot be used with AdaDelta.";
+    // CHECK_EQ("", this->param_.lr_policy())
+    //     << "Learning rate policy cannot be applied to AdaDelta.";
   }
 
   DISABLE_COPY_AND_ASSIGN(AdaDeltaSolver);
