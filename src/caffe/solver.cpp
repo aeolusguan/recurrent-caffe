@@ -345,10 +345,15 @@ void Solver<Dtype>::Test(const int test_net_id) {
 
 template <typename Dtype>
 void Solver<Dtype>::Snapshot() {
+  Snapshot(param_.snapshot_prefix());
+}
+
+template <typename Dtype>
+void Solver<Dtype>::Snapshot(const std::string& snapshot_prefix) {
   NetParameter net_param;
   // For intermediate results, we will also dump the gradient values.
   net_->ToProto(&net_param, param_.snapshot_diff());
-  string filename(param_.snapshot_prefix());
+  string filename(snapshot_prefix);
   string model_filename, snapshot_filename;
   const int kBufferSize = 20;
   char iter_str_buffer[kBufferSize];

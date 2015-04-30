@@ -43,6 +43,7 @@ class Solver {
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
   void Snapshot();
+  void Snapshot(const std::string& snapshot_prefix);
 
  protected:
   // Get the update value for the current iteration.
