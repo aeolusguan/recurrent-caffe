@@ -318,6 +318,7 @@ message LayerParameter {
   optional HDF5DataParameter hdf5_data_param = 112;
   optional HDF5OutputParameter hdf5_output_param = 113;
   optional HingeLossParameter hinge_loss_param = 114;
+  optional HungarianLossParameter hungarian_loss_param = 204;
   optional ImageDataParameter image_data_param = 115;
   optional InfogainLossParameter infogain_loss_param = 116;
   optional InnerProductParameter inner_product_param = 117;
@@ -569,6 +570,13 @@ message HingeLossParameter {
   }
   // Specify the Norm to use L1 or L2
   optional Norm norm = 1 [default = L1];
+}
+
+message HungarianLossParameter {
+  // This parameter sets the loss weight for object confidence
+  optional float obj_weight = 1 [default = 1];
+  // This parameter sets the loss weight for classification
+  optional float cls_weight = 2 [default = 1];
 }
 
 // Message that stores parameters used by ImageDataLayer
