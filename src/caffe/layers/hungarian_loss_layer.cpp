@@ -44,6 +44,10 @@ void HungarianLossLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*> &bottom,
       << "classification weight must be >= 0";
   obj_weight_ = hungarian_loss_param.obj_weight();
   cls_weight_ = hungarian_loss_param.cls_weight();
+
+  assignment_.reserve(bottom[0]->num());
+  min_objectness_.reserve(bottom[0]->num());
+  min_idx_.reserve(bottom[0]->num());
 }
 
 template <typename Dtype>
@@ -52,9 +56,7 @@ void HungarianLossLayer<Dtype>::Reshape(const vector<Blob<Dtype>*> &bottom,
   // LossLayer<Dtype>::Reshape(bottom, top);
   softmax_obj_layer_->Reshape(softmax_obj_bottom_vec_, softmax_obj_top_vec_);
   softmax_cls_layer_->Reshape(softmax_cls_bottom_vec_, softmax_cls_top_vec_);
-  CHECK_EQ(bottom[0]->num(), bottom[1]->num()+1)
-      << "number of predicted bounding boxes must be that"
-         " of ground truth plus 1";
+
   CHECK_EQ(bottom[0]->channels(), 4)
       << "predicted bounding box blob must have 4 channels";
   CHECK_EQ(bottom[1]->channels(), 4)
@@ -65,9 +67,6 @@ void HungarianLossLayer<Dtype>::Reshape(const vector<Blob<Dtype>*> &bottom,
       << "channels of classification score must be 21";
   vector<int> top_shape(1, 1);
   top[0]->Reshape(top_shape);
-  assignment_.reserve(bottom[0]->num());
-  min_objectness_.reserve(bottom[0]->num());
-  min_idx_.reserve(bottom[0]->num());
 }
 
 template <typename Dtype>
@@ -81,14 +80,17 @@ void HungarianLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*> &bottom,
   const Dtype *confidence = confidence_.cpu_data();
   const Dtype *prob = prob_.cpu_data();
 
-  const int num_pred_bboxes = bottom[0]->num();
+  num_pred_bboxes_ = bottom[0]->num() >= bottom[1]->num() + 1 ?
+      bottom[1]->num() + 1 : bottom[1]->num();
   
   // Compute min_objectness_ and min_idx_.
   min_objectness_.clear();
   min_objectness_.push_back(confidence[confidence_.offset(0, 1)]);
   min_idx_.clear();
   min_idx_.push_back(0);
-  for (int k = 1; k < num_pred_bboxes; ++k) {
+  num_pred_bboxes_truth_ = bottom[0]->num() > num_pred_bboxes_ ?
+      num_pred_bboxes_ : bottom[0]->num();
+  for (int k = 1; k < num_pred_bboxes_truth_; ++k) {
     if (confidence[confidence_.offset(k, 1)] < min_objectness_[k-1]) {
       min_objectness_.push_back(confidence[confidence_.offset(k, 1)]);
       min_idx_.push_back(k);
@@ -98,13 +100,14 @@ void HungarianLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*> &bottom,
       min_idx_.push_back(min_idx_[k-1]);
     }
   }
-  
+
   // Compute cost matrix.
-  vector<float> cost(num_pred_bboxes*num_pred_bboxes, 0.f);
-  for (int i = 0; i < num_pred_bboxes; ++i) {  // i: index of predicted bbox
-    for (int j = 0; j < num_pred_bboxes-1; ++j) {  // j: index of ground
-                                                   // truth bbox
-      const int idx = i*num_pred_bboxes + j;
+  vector<float> cost(num_pred_bboxes_*num_pred_bboxes_, 0.f);
+  for (int i = 0; i < num_pred_bboxes_truth_; ++i) {  
+                                                // i: index of predicted bbox
+    for (int j = 0; j < bottom[1]->num(); ++j) {  // j: index of ground
+                                                  // truth bbox
+      const int idx = i*num_pred_bboxes_ + j;
       // location loss (L1 loss)
       for (int c = 0; c < bottom[0]->channels(); ++c) {
         const Dtype pred_value = bbox_pred[bottom[0]->offset(i, c)];
@@ -120,10 +123,19 @@ void HungarianLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*> &bottom,
       cost[idx] -= cls_weight_*std::log(std::max(prob[prob_.offset(i, label)],
                                                  Dtype(FLT_MIN)));
     }
+    if (num_pred_bboxes_ > bottom[1]->num()) {
     // cost for predicted bbox i not assigned to any ground truth bbox
-    cost[(i+1)*num_pred_bboxes-1] -= obj_weight_*
-        std::log(std::max(1-min_objectness_[i], Dtype(FLT_MIN))) + cls_weight_*
-        std::log(std::max(prob[prob_.offset(i, 0)], Dtype(FLT_MIN)));
+      cost[(i+1)*num_pred_bboxes_-1] -= obj_weight_*
+          std::log(std::max(1-min_objectness_[i], Dtype(FLT_MIN))) + 
+          cls_weight_*std::log(std::max(prob[prob_.offset(i, 0)], 
+                                        Dtype(FLT_MIN)));
+    }
+  }
+  for (int i = num_pred_bboxes_truth_; i < num_pred_bboxes_; ++i) {
+    for (int j = 0; j < bottom[1]->num(); ++j) {
+      const int idx = i * num_pred_bboxes_ + j;
+      cost[idx] = Dtype(0);
+    }
   }
 
   // Solve the assignment problem.
@@ -134,30 +146,32 @@ void HungarianLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*> &bottom,
   for (int i = 0; i < cost.size(); ++i) {
     cost_int[i] = static_cast<int>(cost[i]*scale);
   }
-  int **m = array_to_matrix(cost_int.data(), num_pred_bboxes, num_pred_bboxes);
-  hungarian_init(&p, m, num_pred_bboxes, num_pred_bboxes,
+  int **m = array_to_matrix(cost_int.data(), num_pred_bboxes_, 
+      num_pred_bboxes_);
+  hungarian_init(&p, m, num_pred_bboxes_, num_pred_bboxes_,
       HUNGARIAN_MODE_MINIMIZE_COST);
   hungarian_solve(&p);
-  for (int i = 0; i < num_pred_bboxes; ++i) {
-    for (int j = 0; j < num_pred_bboxes; ++j) {
+  for (int i = 0; i < num_pred_bboxes_; ++i) {
+    for (int j = 0; j < num_pred_bboxes_; ++j) {
       if (p.assignment[i][j] == HUNGARIAN_ASSIGNED) {
         assignment_.push_back(j);
       }
     }
   }
-  CHECK_EQ(assignment_.size(), num_pred_bboxes);
+  CHECK_EQ(assignment_.size(), num_pred_bboxes_);
   hungarian_free(&p);
-  for (int i = 0; i < num_pred_bboxes; ++i) {
+  for (int i = 0; i < num_pred_bboxes_; ++i) {
     free(m[i]);
   }
   free(m);
 
   // Compute loss.
   Dtype loss = 0.;
-  for (int i = 0; i < num_pred_bboxes; ++i) {
-    const int idx = i*num_pred_bboxes + assignment_[i];
+  for (int i = 0; i < num_pred_bboxes_; ++i) {
+    const int idx = i*num_pred_bboxes_ + assignment_[i];
     loss += cost[idx];
   }
+  loss /= num_pred_bboxes_truth_;
   top[0]->mutable_cpu_data()[0] = loss;
 }
 
@@ -187,12 +201,11 @@ void HungarianLossLayer<Dtype>::Backward_cpu(
   caffe_copy(prob_.count(), prob, cls_score_diff);
   // caffe_set(bottom[3]->count(), Dtype(0), objectness_diff);
 
-  const int num_pred_bboxes = bottom[0]->num();
-  for (int i = 0; i < num_pred_bboxes; ++i) {  // index for predicted 
-                                               // ground truth
+  for (int i = 0; i < num_pred_bboxes_truth_; ++i) {  // index for predicted 
+                                                      // ground truth
     int min_idx = min_idx_[i];
-    if (assignment_[i] == num_pred_bboxes-1) {  // not assigned to any
-                                                // ground truth bbox
+    if (assignment_[i] == bottom[1]->num()) {  // not assigned to any
+                                               // ground truth bbox
       // Backward objectness loss.
       confidence_diff[bottom[3]->offset(min_idx, 0)] = -min_objectness_[i];
       confidence_diff[bottom[3]->offset(min_idx, 1)] = min_objectness_[i];
@@ -214,13 +227,16 @@ void HungarianLossLayer<Dtype>::Backward_cpu(
             Dtype(1) : Dtype(-1); 
       }
     }
-  }  // for (i = 0; i < num_pred_bboxes; ++i)
+  }  // for (i = 0; i < num_pred_bboxes_truth_; ++i)
 
   // Scale gradient
   const Dtype loss_weight = top_diff[0];
-  caffe_scal(confidence_.count(), loss_weight*obj_weight_, confidence_diff);
-  caffe_scal(prob_.count(), loss_weight*cls_weight_, cls_score_diff);
-  caffe_scal(bottom[0]->count(), loss_weight, bbox_pred_diff);
+  caffe_scal(confidence_.count(), 
+      loss_weight*obj_weight_/num_pred_bboxes_truth_, confidence_diff);
+  caffe_scal(prob_.count(), 
+      loss_weight*cls_weight_/num_pred_bboxes_truth_, cls_score_diff);
+  caffe_scal(bottom[0]->count(), 
+      loss_weight/num_pred_bboxes_truth_, bbox_pred_diff);
 }
 
 #ifdef CPU_ONLY

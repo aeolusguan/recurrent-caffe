@@ -51,6 +51,9 @@ class HungarianLossLayer : public LossLayer<Dtype> {
   vector<Blob<Dtype>*> softmax_cls_bottom_vec_;
   vector<Blob<Dtype>*> softmax_cls_top_vec_;
   Blob<Dtype> prob_;
+
+  int num_pred_bboxes_;
+  int num_pred_bboxes_truth_;
 };
 
 }  // namespace caffe

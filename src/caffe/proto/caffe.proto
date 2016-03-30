@@ -305,6 +305,7 @@ message LayerParameter {
   // engine parameter for selecting the implementation.
   // The default for the engine is set by the ENGINE switch at compile-time.
   optional AccuracyParameter accuracy_param = 102;
+  optional AdaPoolingParameter ada_pooling_param = 137;
   optional ArgMaxParameter argmax_param = 103;
   optional ConcatParameter concat_param = 104;
   optional ContrastiveLossParameter contrastive_loss_param = 105;
@@ -391,6 +392,11 @@ message AccuracyParameter {
   // If no input weights are used, the denominator is the batch size, as the
   // weights each default to 1.
   optional float denominator = 4 [default = 0];
+}
+
+message AdaPoolingParameter {
+  optional uint32 pooled_h = 1 [default = 0]; // The pooled output height
+  optional uint32 pooled_w = 2 [default = 0]; // The pooled output width
 }
 
 // Message that stores parameters used by ArgMaxLayer

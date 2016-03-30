@@ -102,12 +102,14 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
     blobs_to_check.push_back(bottom[check_bottom]);
     propagate_down[check_bottom] = true;
   }
+
   CHECK_GT(blobs_to_check.size(), 0) << "No blobs to check.";
   // Compute the gradient analytically using Backward
   Caffe::set_random_seed(seed_);
   // Ignore the loss from the layer (it's just the weighted sum of the losses
   // from the top blobs, whose gradients we may want to test individually).
   layer->Forward(bottom, top);
+
   // Get additional loss from the objective
   GetObjAndGradient(*layer, top, top_id, top_data_id);
   layer->Backward(top, propagate_down, bottom);
@@ -180,7 +182,7 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
       }
       // LOG(ERROR) << "Feature: " << current_blob->cpu_data()[feat_id];
       // LOG(ERROR) << "computed gradient: " << computed_gradient
-      //    << " estimated_gradient: " << estimated_gradient;
+      //    << " estimated;.dmz_gradient: " << estimated_gradient;
     }
   }
 }
