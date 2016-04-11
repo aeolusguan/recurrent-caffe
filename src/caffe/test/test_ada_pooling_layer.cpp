@@ -19,7 +19,7 @@ class AdaPoolingLayerTest : public MultiDeviceTest<TypeParam> {
 
  protected:
   AdaPoolingLayerTest() :
-      blob_bottom_(new Blob<Dtype>(2, 1, 36, 50)),
+      blob_bottom_(new Blob<Dtype>(2, 2, 14, 14)),
       blob_top_(new Blob<Dtype>()),
       blob_argmax_(new Blob<Dtype>()) { 
     Caffe::set_random_seed(1701);
@@ -50,8 +50,8 @@ TYPED_TEST(AdaPoolingLayerTest, TestGradient) {
   LayerParameter layer_param;
   AdaPoolingParameter *ada_pool_param = 
       layer_param.mutable_ada_pooling_param();
-  ada_pool_param->set_pooled_h(32);
-  ada_pool_param->set_pooled_w(32);
+  ada_pool_param->set_pooled_h(7);
+  ada_pool_param->set_pooled_w(7);
   AdaPoolingLayer<Dtype> layer(layer_param);
   GradientChecker<Dtype> checker(1e-4, 1e-2);
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,

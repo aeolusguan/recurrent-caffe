@@ -22,11 +22,14 @@ void LSTMPrepLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*> &bottom,
 
   net_param.add_input("single_x");
   BlobShape input_shape;
+  input_shape.add_dim(1);
   for (int i = 0; i < bottom[0]->num_axes(); ++i) {
     input_shape.add_dim(bottom[0]->shape(i));
   }
   net_param.add_input_shape()->CopyFrom(input_shape);
-  T_ = 10;
+
+  // LSTM timesteps.
+  T_ = this->layer_param_.lstm_prep_param().tile_k();
 
   // SplitLayer
   LayerParameter *split_param = net_param.add_layer();
@@ -57,22 +60,25 @@ void LSTMPrepLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*> &bottom,
 template <typename Dtype>
 void LSTMPrepLayer<Dtype>::Reshape(const vector<Blob<Dtype>*> &bottom,
                                    const vector<Blob<Dtype>*> &top) {
-  CHECK_EQ(bottom[0]->num(), 1) << "bottom[1] should be a single timestep";
+  CHECK_EQ(single_x_input_->num(), 1) 
+      << "bottom[0] should be a single timestep";
 
   BlobShape output_shape;
   output_shape.add_dim(T_);
-  for (int i = 1; i < bottom[0]->num_axes(); ++i) {
+  for (int i = 0; i < bottom[0]->num_axes(); ++i) {
     output_shape.add_dim(bottom[0]->shape(i));
   }
   top[0]->Reshape(output_shape);
 
   output_shape.Clear();
   output_shape.add_dim(T_);
-  output_shape.add_dim(1);
+  output_shape.add_dim(bottom[0]->num());
   top[1]->Reshape(output_shape);
 
+  // single_x_input_->ReshapeLike(*bottom[0]);
   single_x_input_->ShareData(*bottom[0]);
   single_x_input_->ShareDiff(*bottom[0]);
+  // stacked_x_output_->ReshapeLike(*top[0]);
   stacked_x_output_->ShareData(*top[0]);
   stacked_x_output_->ShareDiff(*top[0]);
 }
@@ -82,10 +88,15 @@ void LSTMPrepLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*> &bottom,
                                        const vector<Blob<Dtype>*> &top) {
   net_->ForwardPrefilled();
   Dtype *cont_data = top[1]->mutable_cpu_data();
-  for (int i = 1; i < T_; ++i) {
-    cont_data[i] = Dtype(1);
+  for (int t = 1; t < T_; ++t) {
+    Dtype *cont_data_step = cont_data + top[1]->offset(t);
+    for (int n = 0; n < bottom[0]->num(); ++n) {
+      cont_data_step[n] = Dtype(1);
+    }
   }
-  cont_data[0] = Dtype(0);
+  for (int n = 0; n < bottom[0]->num(); ++n) {
+    cont_data[n] = Dtype(0);
+  }
 }
 
 template <typename Dtype>

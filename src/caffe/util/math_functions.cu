@@ -9,6 +9,7 @@
 
 #include "caffe/common.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "../../../include/caffe/util/device_alternate.hpp"
 
 namespace caffe {
 
