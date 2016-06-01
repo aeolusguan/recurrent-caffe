@@ -20,7 +20,7 @@ class HungarianLossLayerTest: public MultiDeviceTest<TypeParam> {
     top_vec_.push_back(top_loss_);
 
     vector<int> bbox_pred_shape(3);
-    bbox_pred_shape[0] = 5;  // timestep: 1
+    bbox_pred_shape[0] = 5;  // timestep: 5
     bbox_pred_shape[1] = 3;  // number of streams: 3
     bbox_pred_shape[2] = 4;  // coords of each bbox: 4
     bbox_pred_ = new Blob<Dtype>(bbox_pred_shape);
@@ -132,7 +132,7 @@ TYPED_TEST_CASE(HungarianLossLayerTest, TestDtypesAndDevices);
   EXPECT_EQ(assignment[2], 1);
 }*/
 
-TYPED_TEST(HungarianLossLayerTest, TestPrepareForBBoxes) {
+/*TYPED_TEST(HungarianLossLayerTest, TestPrepareForBBoxes) {
   typedef typename TypeParam::Dtype Dtype;
 
   LayerParameter layer_param;
@@ -161,9 +161,9 @@ TYPED_TEST(HungarianLossLayerTest, TestPrepareForBBoxes) {
   EXPECT_EQ(num_pred_bboxes_truth[0], 5);
   EXPECT_EQ(num_pred_bboxes_truth[1], 4);
   EXPECT_EQ(num_pred_bboxes_truth[2], 5);
-}
+}*/
 
-TYPED_TEST(HungarianLossLayerTest, TestPrepareForConf) {
+/*TYPED_TEST(HungarianLossLayerTest, TestPrepareForConf) {
   typedef typename TypeParam::Dtype Dtype;
 
   LayerParameter layer_param;
@@ -206,21 +206,19 @@ TYPED_TEST(HungarianLossLayerTest, TestPrepareForConf) {
       EXPECT_EQ(min_idx_array[i][j], min_idx[i][j]);
     }
   }
-}
+}*/
 
 TYPED_TEST(HungarianLossLayerTest, TestGradient) {
   typedef typename TypeParam::Dtype Dtype;
 
   LayerParameter layer_param;
-  layer_param.add_loss_weight(1);
+  //layer_param.add_loss_weight(1);
   layer_param.mutable_hungarian_loss_param()->set_cls_weight(1);
   layer_param.mutable_hungarian_loss_param()->set_obj_weight(1);
   HungarianLossLayer<Dtype> layer(layer_param);
-  GradientChecker<Dtype> checker(1e-2, 1e-2, 1701);
-  //checker.CheckGradientExhaustive(&layer, this->bottom_vec_, this->top_vec_,
-  //                                 0);
-  //checker.CheckGradientExhaustive(&layer, this->bottom_vec_, this->top_vec_,
-  //                                 3);
+  GradientChecker<Dtype> checker(1e-4, 1e-2, 1701);
+  checker.CheckGradientExhaustive(&layer, this->bottom_vec_, this->top_vec_, 0);
+  checker.CheckGradientExhaustive(&layer, this->bottom_vec_, this->top_vec_, 3);
   checker.CheckGradientExhaustive(&layer, this->bottom_vec_, this->top_vec_, 4);
 }
 
